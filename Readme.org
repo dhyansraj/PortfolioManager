@@ -1,0 +1,330 @@
+* Run MongoDB
+
+#+begin_src shell
+docker run --name portfoliomanager-mongo --rm -v /home/dhyan/workspace/github/PortfolioManager/mongo/datadir:/data/db -e MONGO_INITDB_ROOT_USERNAME=admin -e MONGO_INITDB_ROOT_PASSWORD=admin -p 27017:27017 -d mongo
+#+end_src
+
+#+RESULTS:
+#+begin_example
+d1d17d7596031f2114e53cc970369504d01224bb8d3c7120ecd84cd5824e04d7
+#+end_example
+
+* Install mongoengine
+
+#+BEGIN_SRC jupyter-python :session py :async yes :results scalar
+
+!pip install mongoengine
+#+END_SRC
+
+* Program
+
+** Connection
+
+#+BEGIN_SRC jupyter-python :session py :async yes :results scalar
+from mongoengine import *
+import datetime
+
+connect('portfolio_manager', host='localhost', port=27017,username='admin', password='admin', authentication_source='admin')
+#+END_SRC
+
+#+RESULTS:
+: MongoClient(host=['localhost:27017'], document_class=dict, tz_aware=False, connect=True, read_preference=Primary())
+
+** Delete Old DB (If Required)
+#+BEGIN_SRC jupyter-python :session py :async yes :results scalar
+Order.drop_collection()
+Asset.drop_collection()
+Position.drop_collection()
+User.drop_collection()
+Portfolio.drop_collection()
+disconnect()
+#+END_SRC
+
+#+RESULTS:
+
+** Define DB Objects
+
+#+BEGIN_SRC jupyter-python :session py :async yes :results scalar
+class Asset(Document):
+    type = StringField(required=True, max_length=20)
+    symbol = StringField(required=True, max_length=10, unique_with='type')
+    open = DecimalField()
+    close = DecimalField()
+    last = DecimalField()
+    time = DateTimeField(default=datetime.datetime.now)
+
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python :session py :async yes :results scalar
+class User(Document):
+    user_id = StringField(required=True, max_length=25)
+    first_name = StringField(required=True, max_length=25)
+    last_name = StringField(required=True, max_length=25)
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python :session py :async yes :results scalar
+class Order(Document):
+    type = BooleanField(default=True)
+    asset = ReferenceField(Asset)
+    user = ReferenceField(User)
+    price = DecimalField(precision=2)
+    quantity = DecimalField()
+    charges = DecimalField(precision=2)
+    time = DateTimeField(default=datetime.datetime.now)
+
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python :session py :async yes :results scalar
+class Position(Document):
+    orders = ListField(ReferenceField(Order))
+    asset = ReferenceField(Asset)
+
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python :session py :async yes :results scalar
+class Portfolio(Document):
+    positions = ListField(ReferenceField(Position))
+    user = ReferenceField(User)
+
+    def buy_asset(self, asset, price, quantity, charges, time):
+        order = Order(asset = asset,
+                      user = self.user,
+                      price = price,
+                      quantity = quantity,
+                      charges = charges,
+                      time = time)
+
+        order.save()
+
+        self.__add_to_position(order)
+
+    def __add_to_position(self, order):
+        pos = [x for x in self.positions if x.asset.type == order.asset.type and x.asset.symbol == order.asset.symbol]
+
+        if not pos:
+            p = Position(orders=[order], asset=order.asset)
+            p.save()
+            self.positions = [p]
+        else:
+            p = pos[0]
+
+            p.orders.append(order)
+
+            p.save()
+
+        self.save()
+
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python :session py :async yes :results scalar
+goog = Asset(type = 'equity',
+            symbol = 'GOOG',
+            open = 1786.07,
+            close = 1766.72,
+            last = 1766.72)
+
+goog.save()
+
+jpm = Asset(type = 'equity',
+            symbol = 'JPM',
+            open = 134.58,
+            close = 138.05,
+            last = 138.05)
+
+jpm.save()
+
+#+END_SRC
+
+#+RESULTS:
+: <Asset: Asset object>
+
+
+
+#+BEGIN_SRC jupyter-python :session py :async yes :results scalar
+dhyan = User(user_id='dhyanraj',
+             first_name='Dhyan',
+             last_name='Raj')
+
+dhyan.save()
+#+END_SRC
+
+#+RESULTS:
+: <User: User object>
+
+#+BEGIN_SRC jupyter-python :session py :async yes :results scalar
+dhyan_port = Portfolio(user=dhyan)
+dhyan_port.save()
+#+END_SRC
+
+#+RESULTS:
+: <Portfolio: Portfolio object>
+
+#+BEGIN_SRC jupyter-python :session py :async yes :results scalar
+dhyan_port.buy_asset(goog, 1600, 10, 0, None)
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python :session py :async yes :results scalar
+dhyan_port.buy_asset(jpm, 160, 16, 0, None)
+#+END_SRC
+
+#+RESULTS:
+
+
+** Create User
+
+
+#+BEGIN_SRC jupyter-python :session py :async yes :results scalar
+dhyan = User(user_id='dhyanraj',
+             first_name='Dhyan',
+             last_name='Raj')
+
+dhyan.save()
+#+END_SRC
+
+#+RESULTS:
+: <User: User object>
+
+** Create Assets
+#+BEGIN_SRC jupyter-python :session py :async yes :results scalar
+jpm = Asset(type = 'equity',
+            symbol = 'JPM',
+            open = 134.58,
+            close = 138.05,
+            last = 138.05)
+
+jpm.save()
+#+END_SRC
+
+#+RESULTS:
+: <Asset: Asset object>
+
+
+#+BEGIN_SRC jupyter-python :session py :async yes :results scalar
+goog = Asset(type = 'equity',
+            symbol = 'GOOG',
+            open = 1786.07,
+            close = 1766.72,
+            last = 1766.72)
+
+goog.save()
+
+#+END_SRC
+
+#+RESULTS:
+: <Asset: Asset object>
+
+
+#+BEGIN_SRC jupyter-python :session py :async yes :results scalar
+tsla = Asset(type = 'equity',
+            symbol = 'TSLA',
+            open = 849.40,
+            close = 811.19,
+            last = 811.19)
+
+tsla.save()
+
+#+END_SRC
+
+#+RESULTS:
+: <Asset: Asset object>
+
+** Create Order
+
+#+BEGIN_SRC jupyter-python :session py :async yes :results scalar
+jpm_o = Order(asset = jpm,
+              price = 124.12,
+              quantity = 5,
+              charges = 0)
+
+jpm_o.save()
+
+#+END_SRC
+
+#+RESULTS:
+: <Order: Order object>
+
+
+#+BEGIN_SRC jupyter-python :session py :async yes :results scalar
+goog_o = Order(asset = goog,
+              price = 1734.07,
+              quantity = 2,
+              charges = 0)
+
+goog_o.save()
+#+END_SRC
+
+#+RESULTS:
+: <Order: Order object>
+
+#+BEGIN_SRC jupyter-python :session py :async yes :results scalar
+
+#+END_SRC
+
+#+RESULTS:
+: 2
+
+#+BEGIN_SRC jupyter-python :session py :async yes :results scalar
+class Test(Document):
+     first_name = StringField(required=True, max_length=25)
+
+     def update_first_name(instance, new_first_name):
+          instance.first_name = new_first_name
+
+          instance.save()
+
+     def test(self):
+          print(self.first_name)
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python :session py :async yes :results scalar
+dhyan = Test(first_name='Dhyan')
+
+dhyan.save()
+#+END_SRC
+
+#+RESULTS:
+: <Test: Test object>
+
+#+BEGIN_SRC jupyter-python :session py :async yes :results scalar
+dhyan.test()
+#+END_SRC
+
+#+RESULTS:
+: Dhyan
+
+#+BEGIN_SRC jupyter-python :session py :async yes :results scalar
+neethu = Test(first_name='Neethu')
+
+neethu.save()
+#+END_SRC
+
+#+RESULTS:
+: <Test: Test object>
+
+#+BEGIN_SRC jupyter-python :session py :async yes :results scalar
+neethu.test()
+#+END_SRC
+
+#+RESULTS:
+: Neethu
+
+#+BEGIN_SRC jupyter-python :session py :async yes :results scalar
+
+#+END_SRC
